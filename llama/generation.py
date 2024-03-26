@@ -135,6 +135,8 @@ class Llama:
         top_p: float = 0.9,
         logprobs: bool = False,
         echo: bool = False,
+        save_start_state: bool = False,
+        load_start_state: bool = False,
     ) -> Tuple[List[List[int]], Optional[List[List[float]]]]:
         """
         Generate text sequences based on provided prompts using the language generation model.
@@ -146,6 +148,9 @@ class Llama:
             top_p (float, optional): Top-p probability threshold for nucleus sampling. Defaults to 0.9.
             logprobs (bool, optional): Flag indicating whether to compute token log probabilities. Defaults to False.
             echo (bool, optional): Flag indicating whether to include prompt tokens in the generated output. Defaults to False.
+            save_start_state (bool, optional): Flag indicating whether to save model state after inputs. Defaults to False.
+            load_start_state (bool, optional): Flag indicating whether to load model state af inputs. Defaults to False.
+
 
         Returns:
             Tuple[List[List[int]], Optional[List[List[float]]]]: A tuple containing generated token sequences and, if logprobs is True, corresponding token log probabilities.
@@ -183,8 +188,17 @@ class Llama:
                 ignore_index=pad_id,
             )
 
+        
+
         for cur_pos in range(min_prompt_len, total_len):
-            logits = self.model.forward(tokens[:, prev_pos:cur_pos], prev_pos)
+            if save_start_state:
+                logits = self.model.forward(tokens[:, prev_pos:cur_pos], prev_pos, save=True)
+                save_start_state=False
+            elif load_start_state:
+                logits = self.model.forward(tokens[:, prev_pos:cur_pos], prev_pos, load=True)
+                load_start_state = False
+            else:
+                logits = self.model.forward(tokens[:, prev_pos:cur_pos], prev_pos)
             if temperature > 0:
                 probs = torch.softmax(logits[:, -1] / temperature, dim=-1)
                 next_token = sample_top_p(probs, top_p)
@@ -238,6 +252,8 @@ class Llama:
         max_gen_len: Optional[int] = None,
         logprobs: bool = False,
         echo: bool = False,
+        save_start_state: bool = False,
+        load_start_state: bool = False,
     ) -> List[CompletionPrediction]:
         """
         Perform text completion for a list of prompts using the language generation model.
@@ -250,6 +266,8 @@ class Llama:
                 If not provided, it's set to the model's maximum sequence length minus 1.
             logprobs (bool, optional): Flag indicating whether to compute token log probabilities. Defaults to False.
             echo (bool, optional): Flag indicating whether to include prompt tokens in the generated output. Defaults to False.
+            save_start_state (bool, optional): Flag indicating whether to save model state after inputs. Defaults to False
+            load_start_state (bool, optional): Flag indicating whether to load model state af inputs. Defaults to False.
 
         Returns:
             List[CompletionPrediction]: List of completion predictions, each containing the generated text completion.
@@ -288,6 +306,8 @@ class Llama:
         top_p: float = 0.9,
         max_gen_len: Optional[int] = None,
         logprobs: bool = False,
+        save_start_state: bool = False,
+        load_start_state: bool = False,
     ) -> List[ChatPrediction]:
         """
         Generate assistant responses for a list of conversational dialogs using the language generation model.
@@ -299,6 +319,8 @@ class Llama:
             max_gen_len (Optional[int], optional): Maximum length of the generated response sequence.
                 If not provided, it's set to the model's maximum sequence length minus 1.
             logprobs (bool, optional): Flag indicating whether to compute token log probabilities. Defaults to False.
+            save_start_state (bool, optional): Flag indicating whether to save model state after inputs. Defaults to False
+            load_start_state (bool, optional): Flag indicating whether to load model state af inputs. Defaults to False.
 
         Returns:
             List[ChatPrediction]: List of chat predictions, each containing the assistant's generated response.
@@ -367,6 +389,8 @@ class Llama:
             temperature=temperature,
             top_p=top_p,
             logprobs=logprobs,
+            save_start_state = save_start_state,
+            load_start_state = load_start_state,
         )
         if logprobs:
             return [

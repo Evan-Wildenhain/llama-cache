@@ -4,6 +4,7 @@
 import math
 from dataclasses import dataclass
 from typing import Optional, Tuple
+import time
 
 import fairscale.nn.model_parallel.initialize as fs_init
 import torch
@@ -453,8 +454,22 @@ class Transformer(nn.Module):
             self.params.dim // self.params.n_heads, self.params.max_seq_len * 2
         )
 
+    
+    def save_layers(self,file_path: str):
+        torch.save(self.layers, file_path)
+
+
+    def load_layers(self, file_path: str):
+        self.layers = torch.load(file_path)
+
+    def save_hidden_states(self, h: torch.Tensor, file_path: str):
+        torch.save(h, file_path)
+
+    def load_hidden_states(self, file_path: str) -> torch.Tensor:
+        return torch.load(file_path)
+
     @torch.inference_mode()
-    def forward(self, tokens: torch.Tensor, start_pos: int):
+    def forward(self, tokens: torch.Tensor, start_pos: int, save: bool = False, load: bool = False):
         """
         Perform a forward pass through the Transformer model.
 
@@ -468,6 +483,17 @@ class Transformer(nn.Module):
         """
         _bsz, seqlen = tokens.shape
         h = self.tok_embeddings(tokens)
+
+        if load:
+            print("loading start data.")
+            start = time.time()
+            self.layers = torch.nn.ModuleList()
+            h = self.load_hidden_states("h.pkl")
+            self.load_layers("layers.pkl")
+            end = time.time()
+            elapsed = end - start
+            print(f"runtime to load: {elapsed:.5f} seconds")
+
         self.freqs_cis = self.freqs_cis.to(h.device)
         freqs_cis = self.freqs_cis[start_pos : start_pos + seqlen]
 
@@ -488,8 +514,20 @@ class Transformer(nn.Module):
                 mask
             ]).type_as(h)
 
-        for layer in self.layers:
-            h = layer(h, start_pos, freqs_cis, mask)
+        if not load:
+            for layer in self.layers:
+                h = layer(h, start_pos, freqs_cis, mask)
+
+
+        if save:
+            print("saving start data")
+            start = time.time()
+            self.save_hidden_states(h, "h.pkl")
+            self.save_layers("layers.pkl")
+            end = time.time()
+            elapsed = end - start
+            print(f"runtime to save: {elapsed:.5f} seconds")
+
         h = self.norm(h)
         output = self.output(h).float()
         return output
